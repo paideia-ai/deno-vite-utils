@@ -1,6 +1,8 @@
 {
   "type": "module",
   "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
     "rollup-plugin-node-externals": "^8.0.0"
   },
   "devDependencies": {
