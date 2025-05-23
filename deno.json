@@ -1,0 +1,29 @@
+{
+  "workspace": [
+    "./deno-vite-plus"
+  ],
+  "compilerOptions": {
+    "lib": ["ESNext"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "npm:react",
+    "jsxImportSourceTypes": "npm:@types/react"
+  },
+  "fmt": {
+    "indentWidth": 2,
+    "semiColons": false,
+    "singleQuote": true,
+    "exclude": ["**/pnpm-lock.yaml"]
+  },
+  "lint": {
+    "plugins": [
+      "jsr:@aireone/deno-lint-curly"
+    ],
+    "rules": {
+      "exclude": ["no-slow-types", "require-await"]
+    }
+  },
+  "tasks": {
+    "githooks-init": "git config core.hooksPath .githooks"
+  },
+  "nodeModulesDir": "auto"
+}

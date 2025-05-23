@@ -1,0 +1,16 @@
+{
+  "name": "@pea2/faster-deno-vite",
+  "exports": {
+    ".": "./index.ts",
+    "./faster-deno-css": "./faster-deno-css.ts"
+  },
+  "imports": {
+    "@/lib/": "./lib/",
+    "@/lib/utils.ts": "./lib/utils.ts",
+    "@/lib/resolver.ts": "./lib/resolver.ts"
+  },
+  "tasks": {
+    "test": "deno run -A tests/run-tests.ts",
+    "clean": "rm -rf tests/fixtures/*/dist"
+  }
+}
