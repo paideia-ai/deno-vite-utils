@@ -6,9 +6,13 @@ import { transform } from 'esbuild'
 import {
   isDenoSpecifier,
   mediaTypeToLoader,
+  type NpmResolvedInfo,
   parseDenoSpecifier,
+  type ResolvedInfo,
+  toDenoSpecifier,
 } from '@/lib/utils.ts'
 import { Resolver } from '@/lib/resolver.ts'
+import { parseNpmSpecifier } from 'npm-unprefix.ts'
 
 /* ─── Options & defaults ──────────────────────────────────────────────── */
 
@@ -51,13 +55,55 @@ function handleNpmSpecifier(id: string): never {
 
 /* ─── Core plugin factory ─────────────────────────────────────────────── */
 
+async function resolve(
+  specifier: string,
+  importerSpecifier: string | null,
+): Promise<ResolvedInfo | NpmResolvedInfo | null> {
+  return Promise.resolve(null)
+}
+
+function retrieveEsmModule(specifier: string): Promise<ResolvedInfo> {
+  throw new Error('Not implemented')
+}
+
+function parseDenoID(id: string): string | null {
+  throw new Error('Not implemented')
+}
+
+function npmSpecifierToNpmId(specifier: string, npmPackage: string): string {
+  /*
+   {
+      "kind": "npm",
+      "specifier": "npm:/@prisma/client@6.8.2/runtime/client",
+      "npmPackage": "@prisma/client@6.8.2"
+    }
+
+    => @prisma/client/runtime/client
+  */
+  throw new Error('Not implemented')
+}
+
+interface ModuleStorage {
+  __denoSsrDevModules?: Record<string, Record<string, unknown>>
+}
+
 export default function viteDenoResolver(
   opts: DenoResolverPluginOptions = {},
 ): Plugin {
   let resolver!: Resolver
 
+  let isDev = false
+  let isSSR = false
+
   return {
     name: 'vite-deno-resolver',
+
+    async config(config, env) {
+      isDev = env.command === 'serve'
+      isSSR = env.isSsrBuild || false
+
+      return config
+    },
 
     async configResolved(config: ResolvedConfig) {
       const cacheFile = join(config.cacheDir, 'faster-deno.json')
@@ -69,59 +115,84 @@ export default function viteDenoResolver(
       await resolver.readCache()
     },
 
-    async resolveId(id, importer) {
-      // Check if this is an npm: specifier (should be handled by npm-unprefix)
-      if (id.startsWith('npm:')) {
-        handleNpmSpecifier(id)
+    async resolveId(id, importer, options) {
+      const importerSpecifier = importer && parseDenoID(importer)
+      const target = await resolve(id, importerSpecifier || null)
+
+      if (!target) {
+        return null
       }
 
-      // Check for externals first
-      for (const prefix of opts.externalPrefixes ?? []) {
-        if (id.startsWith(prefix)) {
-          return {
-            id,
-            external: true,
-          }
-        }
+      if (target.kind === 'npm') {
+        const npmId = npmSpecifierToNpmId(target.specifier, target.npmPackage)
+        return this.resolve(npmId, importer, {
+          ...options,
+          skipSelf: true,
+        })
       }
 
-      // Whitelist approach - we only handle:
-      // 1. If importer is a deno specifier
-      // 2. If id starts with jsr: or @
-      if (importer && isDenoSpecifier(importer)) {
-        const { id: importerId, resolved: importerPath } = parseDenoSpecifier(
-          importer,
-        )
-        return await resolver.resolveNestedImport(id, importerId, importerPath)
+      const resolvedId = '\0deno::${target.specifier}'
+      if (!isSSR || isDev) {
+        return resolvedId
       }
 
-      if (shouldHandleId(id)) {
-        return await resolver.resolveBase(id)
+      // TODO: we need to decide if this should be external or not
+      return {
+        id: resolvedId,
+        external: false,
       }
-
-      // Let other plugins handle this import
-      return null
     },
 
     async load(id) {
-      if (!isDenoSpecifier(id)) {
-        return
+      if (!id.startsWith('\0deno::')) {
+        return null
       }
 
-      const { loader, resolved } = parseDenoSpecifier(id)
+      const moduleInfo = await retrieveEsmModule(id)
 
-      const src = await Deno.readTextFile(resolved)
+      if (isDev && isSSR) {
+        // we need to construct virtual module
 
-      if (loader === 'JavaScript') {
+        const module = await import(moduleInfo.specifier)
+        const moduleStorage = globalThis as ModuleStorage
+
+        if (!moduleStorage.__denoSsrDevModules) {
+          moduleStorage.__denoSsrDevModules = {}
+        }
+
+        moduleStorage.__denoSsrDevModules[moduleInfo.specifier] = module
+
+        let sourceCode =
+          `const module = globalThis.__denoSsrDevModules['${moduleInfo.specifier}']\n\n`
+
+        let hasDefault = false
+        for (const key in module) {
+          if (key !== 'default') {
+            sourceCode += `export const ${key} = module.${key};\n`
+          } else {
+            hasDefault = true
+          }
+        }
+
+        if (hasDefault) {
+          sourceCode += `export default module.default;\n`
+        }
+
+        return sourceCode
+      }
+
+      const src = await Deno.readTextFile(moduleInfo.local)
+
+      if (moduleInfo.mediaType === 'JavaScript') {
         return src
       }
-      if (loader === 'Json') {
+      if (moduleInfo.mediaType === 'Json') {
         return `export default ${src}`
       }
 
       const result = await transform(src, {
         format: 'esm',
-        loader: mediaTypeToLoader(loader),
+        loader: mediaTypeToLoader(moduleInfo.mediaType),
         logLevel: 'silent',
       })
 

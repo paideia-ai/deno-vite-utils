@@ -92,7 +92,7 @@ export interface ResolvedInfo {
   }>
 }
 
-interface NpmResolvedInfo {
+export interface NpmResolvedInfo {
   kind: 'npm'
   specifier: string
   npmPackage: string
