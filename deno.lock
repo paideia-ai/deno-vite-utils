@@ -794,10 +794,7 @@
   "workspace": {
     "dependencies": [
       "npm:@types/react@*",
-      "npm:react-dom@^19.1.0",
-      "npm:react@*",
-      "npm:react@^19.1.0",
-      "npm:vite@^6.3.5"
+      "npm:react@*"
     ],
     "members": {
       "deno-vite-plus": {
@@ -810,6 +807,13 @@
             "npm:vite@^6.3.5"
           ]
         }
+      },
+      "example-basic": {
+        "dependencies": [
+          "npm:react-dom@^19.1.0",
+          "npm:react@^19.1.0",
+          "npm:vite@^6.3.5"
+        ]
       }
     }
   }

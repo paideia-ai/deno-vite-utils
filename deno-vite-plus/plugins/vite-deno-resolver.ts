@@ -7,30 +7,39 @@ import { mediaTypeToLoader } from '@/lib/utils.ts'
 import { DenoEnv, DenoResolver } from '../playground.ts'
 
 export function toDenoSpecifier(specifier: string): string {
-  return '\0deno::' + crypto.randomUUID() + '::' + specifier
+  const encoded = encodeURIComponent(specifier)
+  return '\0deno::' + encoded
 }
 
 export function parseDenoSpecifier(specifier: string): string | null {
   if (!specifier.startsWith('\0deno::')) {
     return null
   }
-  return specifier.slice(7 + crypto.randomUUID().length + 2)
+  const encoded = specifier.slice(7)
+  return decodeURIComponent(encoded)
 }
 
 export function npmSpecifierToNpmId(
   specifier: string,
   npmPackage: string,
 ): string {
-  let unversionedPackageName = ''
-
-  if (npmPackage.startsWith('@')) {
-    unversionedPackageName = '@' + npmPackage.split('@')[1]
+  // Remove npm:/ prefix
+  const withoutPrefix = specifier.slice(5)
+  
+  // Split by / to separate package name from path
+  const parts = withoutPrefix.split('/')
+  
+  if (parts[0].startsWith('@')) {
+    // Scoped package: @org/package@version/path -> @org/package/path
+    const scopedPackage = parts[0] + '/' + parts[1].split('@')[0]
+    const pathParts = parts.slice(2)
+    return pathParts.length > 0 ? scopedPackage + '/' + pathParts.join('/') : scopedPackage
   } else {
-    unversionedPackageName = npmPackage.split('@')[0]
+    // Regular package: package@version/path -> package/path
+    const packageName = parts[0].split('@')[0]
+    const pathParts = parts.slice(1)
+    return pathParts.length > 0 ? packageName + '/' + pathParts.join('/') : packageName
   }
-
-  const path = specifier.slice(npmPackage.length + 5)
-  return unversionedPackageName + path
 }
 
 interface ModuleStorage {
@@ -50,6 +59,34 @@ export default function viteDenoResolver(): Plugin {
     async config(config, env) {
       isDev = env.command === 'serve'
       isSSR = env.isSsrBuild || false
+
+      // Ensure correct resolve conditions for browser vs SSR
+      if (!config.resolve) {
+        config.resolve = {}
+      }
+
+      if (!config.resolve.conditions) {
+        config.resolve.conditions = []
+      }
+
+      if (isSSR) {
+        // For SSR in Deno, prioritize deno conditions before node
+        const denoConditions = ['deno', 'import', 'module']
+        for (const condition of denoConditions) {
+          if (!config.resolve.conditions.includes(condition)) {
+            config.resolve.conditions.unshift(condition)
+          }
+        }
+        // Add node as fallback
+        if (!config.resolve.conditions.includes('node')) {
+          config.resolve.conditions.push('node')
+        }
+      } else {
+        // For browser, ensure browser conditions are used
+        if (!config.resolve.conditions.includes('browser')) {
+          config.resolve.conditions.push('browser')
+        }
+      }
 
       return config
     },
@@ -114,6 +151,7 @@ export default function viteDenoResolver(): Plugin {
           console.log(
             'encounterd npm specifier',
             targetModule.specifier,
+            targetModule.npmPackage,
             'let vite to resolve',
             npmId,
           )
@@ -202,6 +240,8 @@ export default function viteDenoResolver(): Plugin {
           format: 'esm',
           loader: mediaTypeToLoader(moduleInfo.mediaType),
           logLevel: 'silent',
+          jsx: 'automatic',
+          jsxImportSource: 'react',
         })
 
         return { code: result.code, map: result.map === '' ? null : result.map }

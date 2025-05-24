@@ -1,6 +1,7 @@
 {
   "workspace": [
-    "./deno-vite-plus"
+    "./deno-vite-plus",
+    "./example-basic"
   ],
   "compilerOptions": {
     "lib": ["ESNext"],
@@ -25,10 +26,5 @@
   "tasks": {
     "githooks-init": "git config core.hooksPath .githooks"
   },
-  "nodeModulesDir": "auto",
-  "imports": {
-    "react": "npm:react@^19.1.0",
-    "react-dom": "npm:react-dom@^19.1.0",
-    "vite": "npm:vite@^6.3.5"
-  }
+  "nodeModulesDir": "auto"
 }

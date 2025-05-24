@@ -1,41 +1,52 @@
-import { assertEquals, assertThrows } from 'jsr:@std/assert'
-import { shouldHandleId } from './vite-deno-resolver.ts'
+import { assertEquals } from 'jsr:@std/assert'
+import { npmSpecifierToNpmId } from './vite-deno-resolver.ts'
 
-// Mock the handleNpmSpecifier function since it's not exported
-const mockHandleNpmSpecifier = () => {
-  throw new Error('npm: specifier found')
-}
-
-Deno.test('shouldHandleId handles JSR imports', () => {
-  assertEquals(shouldHandleId('jsr:@std/path'), true)
-  assertEquals(shouldHandleId('jsr:@std/fs'), true)
+Deno.test('npmSpecifierToNpmId - basic package', () => {
   assertEquals(
-    shouldHandleId('jsr:@isofucius/deno-shadcn-ui/default/ui/button'),
-    true,
+    npmSpecifierToNpmId('npm:/react@18.2.0', 'react@18.2.0'),
+    'react'
   )
 })
 
-Deno.test('shouldHandleId handles scoped packages', () => {
-  assertEquals(shouldHandleId('@std/path'), true)
-  assertEquals(shouldHandleId('@isofucius/deno-shadcn-ui'), true)
-})
-
-Deno.test('shouldHandleId rejects wildcards and null bytes', () => {
-  assertEquals(shouldHandleId('some/path/*'), false)
-  assertEquals(shouldHandleId('some/path/\0'), false)
-})
-
-Deno.test('shouldHandleId rejects regular paths', () => {
-  assertEquals(shouldHandleId('react'), false)
-  assertEquals(shouldHandleId('./local/path'), false)
-  assertEquals(shouldHandleId('/absolute/path'), false)
-  assertEquals(shouldHandleId('../relative/path'), false)
-})
-
-Deno.test('handleNpmSpecifier throws error for npm imports', () => {
-  assertThrows(
-    () => mockHandleNpmSpecifier(),
-    Error,
-    'npm: specifier found',
+Deno.test('npmSpecifierToNpmId - package with subpath', () => {
+  assertEquals(
+    npmSpecifierToNpmId('npm:/react-dom@19.1.0/client', 'react-dom@19.1.0'),
+    'react-dom/client'
   )
 })
+
+Deno.test('npmSpecifierToNpmId - scoped package with subpath', () => {
+  assertEquals(
+    npmSpecifierToNpmId('npm:/@babel/core@7.22.0/lib/index.js', '@babel/core@7.22.0'),
+    '@babel/core/lib/index.js'
+  )
+})
+
+Deno.test('npmSpecifierToNpmId - package with complex version', () => {
+  assertEquals(
+    npmSpecifierToNpmId('npm:/lodash@^4.17.21', 'lodash@^4.17.21'),
+    'lodash'
+  )
+})
+
+Deno.test('npmSpecifierToNpmId - scoped package with complex version', () => {
+  assertEquals(
+    npmSpecifierToNpmId('npm:/@types/node@~20.5.0', '@types/node@~20.5.0'),
+    '@types/node'
+  )
+})
+
+Deno.test('npmSpecifierToNpmId - package with peer dependencies', () => {
+  assertEquals(
+    npmSpecifierToNpmId('npm:/react-dom@19.1.0/client', 'react-dom@19.1.0_react@19.1.0'),
+    'react-dom/client'
+  )
+})
+
+Deno.test('npmSpecifierToNpmId - scoped package with peer dependencies', () => {
+  assertEquals(
+    npmSpecifierToNpmId('npm:/@testing-library/react@14.0.0', '@testing-library/react@14.0.0_react@18.2.0'),
+    '@testing-library/react'
+  )
+})
+
