@@ -25,5 +25,10 @@
   "tasks": {
     "githooks-init": "git config core.hooksPath .githooks"
   },
-  "nodeModulesDir": "auto"
+  "nodeModulesDir": "auto",
+  "imports": {
+    "react": "npm:react@^19.1.0",
+    "react-dom": "npm:react-dom@^19.1.0",
+    "vite": "npm:vite@^6.3.5"
+  }
 }
