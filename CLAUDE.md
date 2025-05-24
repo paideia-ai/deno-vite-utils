@@ -2,14 +2,20 @@
 
 ## Project Overview
 
-This project is developing a comprehensive Vite plugin ecosystem for Deno 2, enabling seamless integration between Vite and Deno's modern runtime features. The main package `deno-vite-plus` provides multiple plugins to handle Deno-specific imports, SSR support, and build optimizations.
+This project is developing a comprehensive Vite plugin ecosystem for Deno 2,
+enabling seamless integration between Vite and Deno's modern runtime features.
+The main package `deno-vite-plus` provides multiple plugins to handle
+Deno-specific imports, SSR support, and build optimizations.
 
 ## Project Goals
 
-1. **Handle Deno-specific imports**: Support for `jsr:`, `npm:`, and `@` prefixed imports
-2. **Full SSR support**: Both development and production SSR with flexible externalization strategies
+1. **Handle Deno-specific imports**: Support for `jsr:`, `npm:`, and `@`
+   prefixed imports
+2. **Full SSR support**: Both development and production SSR with flexible
+   externalization strategies
 3. **Import map support**: Leverage Deno's native import map resolution
-4. **HMR support**: Long-term goal for hot module replacement (currently CSS HMR is supported)
+4. **HMR support**: Long-term goal for hot module replacement (currently CSS HMR
+   is supported)
 5. **Workspace support**: Work in both workspace and direct usage scenarios
 
 ## Current Implementation Status
@@ -38,7 +44,8 @@ This project is developing a comprehensive Vite plugin ecosystem for Deno 2, ena
 ### Pending Features
 
 1. **Import Maps**:
-   - ⏳ Explicit import map file support (currently relies on Deno's native resolution)
+   - ⏳ Explicit import map file support (currently relies on Deno's native
+     resolution)
    - ⏳ Import map merging and transformation
 
 2. **HMR**:
@@ -66,21 +73,26 @@ The project uses a modular plugin architecture with four main plugins:
 
 ### Key Design Decisions
 
-1. **Whitelist approach**: Only handle known Deno-specific patterns, let Vite handle the rest
-2. **Native Deno integration**: Use `deno info` for resolution to ensure compatibility
+1. **Whitelist approach**: Only handle known Deno-specific patterns, let Vite
+   handle the rest
+2. **Native Deno integration**: Use `deno info` for resolution to ensure
+   compatibility
 3. **Caching strategy**: Cache resolutions to minimize subprocess calls
-4. **Internal ID format**: Use `\0` prefix for virtual modules to avoid conflicts
+4. **Internal ID format**: Use `\0` prefix for virtual modules to avoid
+   conflicts
 
 ## Development Guidelines
 
 ### Testing
 
 Run tests with:
+
 ```bash
 deno task test
 ```
 
 Tests include:
+
 - Unit tests for individual plugins
 - Integration tests for full build pipeline
 - Example fixtures for manual testing
@@ -104,6 +116,7 @@ Tests include:
 ### Linting and Type Checking
 
 The project should support standard Deno commands:
+
 - `deno fmt` - Format code
 - `deno lint` - Lint code
 - `deno check` - Type check
@@ -111,6 +124,7 @@ The project should support standard Deno commands:
 ### Building and Testing
 
 From `deno-vite-plus` directory:
+
 - `deno task test` - Run all tests
 - `deno task clean` - Clean build artifacts
 

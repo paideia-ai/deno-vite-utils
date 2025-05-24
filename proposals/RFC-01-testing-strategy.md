@@ -1,17 +1,21 @@
 # RFC-01: Testing Strategy for Deno Vite Plugin
 
-**Status:** Draft  
-**Author:** [To be filled]  
-**Created:** 2025-01-23  
+**Status:** Draft\
+**Author:** [To be filled]\
+**Created:** 2025-01-23\
 **Discussion:** [Link to discussion]
 
 ## Summary
 
-This RFC proposes a comprehensive testing strategy for the Deno Vite plugin, based on proven patterns used by Vite itself and major Vite plugins. The approach emphasizes in-process testing for speed and reliability while covering all critical code paths.
+This RFC proposes a comprehensive testing strategy for the Deno Vite plugin,
+based on proven patterns used by Vite itself and major Vite plugins. The
+approach emphasizes in-process testing for speed and reliability while covering
+all critical code paths.
 
 ## Motivation
 
 A robust testing strategy is essential for:
+
 - Ensuring plugin reliability across different scenarios
 - Catching regressions early
 - Validating both development and production builds
@@ -35,7 +39,8 @@ tests/fixtures/
 └── edge-cases/            # Error scenarios
 ```
 
-Each fixture contains only the minimum files needed to test specific plugin functionality.
+Each fixture contains only the minimum files needed to test specific plugin
+functionality.
 
 ### 2. In-Process Dev Server Testing
 
@@ -47,7 +52,7 @@ import { createServer, InlineConfig, ViteDevServer } from 'vite'
 import { denoVite } from '../../deno-vite-plus/index.ts'
 
 export async function startDevServer(
-  config: InlineConfig & { fixture: string }
+  config: InlineConfig & { fixture: string },
 ): Promise<ViteDevServer> {
   const server = await createServer({
     configFile: false,
@@ -55,22 +60,22 @@ export async function startDevServer(
     root: `${import.meta.dirname}/fixtures/${config.fixture}`,
     plugins: [
       denoVite(config.denoVite || {}),
-      ...(config.plugins || [])
+      ...(config.plugins || []),
     ],
-    server: { 
-      middlewareMode: true,  // No file watcher, no HMR WS
-      port: 0               // Auto-select port
+    server: {
+      middlewareMode: true, // No file watcher, no HMR WS
+      port: 0, // Auto-select port
     },
-    ...config
+    ...config,
   })
-  
+
   await server.listen()
   return server
 }
 
 export async function transformRequest(
   server: ViteDevServer,
-  path: string
+  path: string,
 ) {
   return server.environments.client.transformRequest(path)
 }
@@ -82,34 +87,34 @@ export async function transformRequest(
 
 ```typescript
 // tests/dev-server.test.ts
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { startDevServer, transformRequest } from './utils/dev-server.ts'
 import type { ViteDevServer } from 'vite'
 
 describe('Deno Resolver Plugin - Dev', () => {
   let server: ViteDevServer
-  
+
   beforeAll(async () => {
-    server = await startDevServer({ 
+    server = await startDevServer({
       fixture: 'basic-browser',
-      denoVite: { /* options */ }
+      denoVite: {/* options */},
     })
   })
-  
+
   afterAll(() => server.close())
-  
+
   it('resolves JSR imports', async () => {
     const result = await transformRequest(server, '/src/main.ts')
     expect(result?.code).toContain('// Resolved from jsr:@std/path')
     expect(result?.code).not.toContain('jsr:')
   })
-  
+
   it('transforms TypeScript correctly', async () => {
     const result = await transformRequest(server, '/src/component.tsx')
     expect(result?.code).not.toContain('interface')
     expect(result?.code).toContain('jsx(')
   })
-  
+
   it('handles import maps', async () => {
     const result = await transformRequest(server, '/src/aliased.ts')
     expect(result?.code).toContain('resolved-path')
@@ -120,10 +125,10 @@ describe('NPM Unprefix Plugin - Dev', () => {
   it('strips npm: prefixes', async () => {
     const server = await startDevServer({ fixture: 'npm-imports' })
     const result = await transformRequest(server, '/src/npm-user.ts')
-    
+
     expect(result?.code).not.toContain('npm:')
     expect(result?.code).toContain('from "react"')
-    
+
     await server.close()
   })
 })
@@ -135,24 +140,24 @@ describe('NPM Unprefix Plugin - Dev', () => {
 // tests/ssr-dev.test.ts
 describe('SSR Dev Plugin', () => {
   let server: ViteDevServer
-  
+
   beforeAll(async () => {
     server = await startDevServer({
       fixture: 'basic-ssr',
       denoVite: {
-        ssr: { external: ['react', '@org/*'] }
-      }
+        ssr: { external: ['react', '@org/*'] },
+      },
     })
   })
-  
+
   afterAll(() => server.close())
-  
+
   it('loads external modules natively', async () => {
     const mod = await server.ssrLoadModule('/src/entry-server.tsx')
     expect(mod.render).toBeDefined()
     expect(globalThis.__deno_ssr_dev_modules__).toHaveProperty('react')
   })
-  
+
   it('transforms non-external modules', async () => {
     const mod = await server.ssrLoadModule('/src/internal.ts')
     expect(mod.__transformed).toBe(true)
@@ -171,15 +176,15 @@ describe('Error Handling', () => {
     const server = await startDevServer({ fixture: 'edge-cases' })
     const logger = vi.spyOn(server.config.logger, 'error')
       .mockImplementation(() => {})
-    
+
     await expect(
-      transformRequest(server, '/src/missing-jsr.ts')
+      transformRequest(server, '/src/missing-jsr.ts'),
     ).rejects.toThrow('Failed to resolve JSR import')
-    
+
     expect(logger).toHaveBeenCalledWith(
-      expect.stringContaining('jsr:@missing/package')
+      expect.stringContaining('jsr:@missing/package'),
     )
-    
+
     await server.close()
   })
 })
@@ -197,37 +202,37 @@ import { join } from 'node:path'
 describe('Production Builds', () => {
   it('browser build includes resolved JSR imports', async () => {
     const outDir = mkdtempSync(join(tmpdir(), 'vite-build-'))
-    
+
     await build({
       root: __dirname + '/fixtures/basic-browser',
       plugins: [denoVite()],
       build: { outDir },
-      logLevel: 'error'
+      logLevel: 'error',
     })
-    
+
     const js = readFileSync(
-      join(outDir, 'assets/index-[hash].js'), 
-      'utf8'
+      join(outDir, 'assets/index-[hash].js'),
+      'utf8',
     )
     expect(js).toContain('// Bundled from jsr:@std/path')
     expect(js).not.toContain('jsr:')
   })
-  
+
   it('SSR build handles externals correctly', async () => {
     const outDir = mkdtempSync(join(tmpdir(), 'vite-ssr-'))
-    
+
     await build({
       root: __dirname + '/fixtures/basic-ssr',
       plugins: [denoVite({ ssr: { external: ['react'] } })],
-      build: { 
+      build: {
         ssr: 'src/entry-server.tsx',
-        outDir 
-      }
+        outDir,
+      },
     })
-    
+
     const serverJs = readFileSync(
-      join(outDir, 'entry-server.js'), 
-      'utf8'
+      join(outDir, 'entry-server.js'),
+      'utf8',
     )
     expect(serverJs).toContain('require("react")')
     expect(serverJs).not.toContain('npm:react')
@@ -247,21 +252,21 @@ describe('Full Integration', () => {
   it('HMR works with JSR imports', async () => {
     const proc = execa('vite', [], {
       cwd: __dirname + '/fixtures/basic-browser',
-      env: { ...process.env, FORCE_COLOR: '0' }
+      env: { ...process.env, FORCE_COLOR: '0' },
     })
-    
+
     await waitOn({ resources: ['tcp:5173'] })
-    
+
     const browser = await chromium.launch()
     const page = await browser.newPage()
     await page.goto('http://localhost:5173')
-    
+
     // Initial content check
     expect(await page.textContent('h1')).toBe('Hello from JSR')
-    
+
     // Modify file and check HMR
     // ... file modification logic ...
-    
+
     await browser.close()
     proc.kill('SIGTERM')
   })
@@ -275,18 +280,18 @@ describe('Full Integration', () => {
 describe('Performance', () => {
   it('caches resolution results', async () => {
     const server = await startDevServer({ fixture: 'basic-browser' })
-    
+
     const start1 = performance.now()
     await transformRequest(server, '/src/heavy-jsr-imports.ts')
     const time1 = performance.now() - start1
-    
+
     const start2 = performance.now()
     await transformRequest(server, '/src/heavy-jsr-imports.ts')
     const time2 = performance.now() - start2
-    
+
     // Second request should be significantly faster
     expect(time2).toBeLessThan(time1 * 0.1)
-    
+
     await server.close()
   })
 })
@@ -294,15 +299,15 @@ describe('Performance', () => {
 
 ## Test Matrix
 
-| Feature | Dev Test | Build Test | Integration Test |
-|---------|----------|------------|------------------|
-| JSR Resolution | `transformRequest` | `build()` + file assertions | Browser test |
-| NPM Unprefixing | `transformRequest` | `build()` + file assertions | - |
-| Import Maps | `transformRequest` | `build()` + file assertions | - |
-| SSR External | `ssrLoadModule` | `build({ ssr })` | - |
-| CSS Imports | `transformRequest` | `build()` + CSS assertions | Browser test |
-| Error Messages | Logger spy | Build rejection | - |
-| HMR | - | - | Playwright test |
+| Feature         | Dev Test           | Build Test                  | Integration Test |
+| --------------- | ------------------ | --------------------------- | ---------------- |
+| JSR Resolution  | `transformRequest` | `build()` + file assertions | Browser test     |
+| NPM Unprefixing | `transformRequest` | `build()` + file assertions | -                |
+| Import Maps     | `transformRequest` | `build()` + file assertions | -                |
+| SSR External    | `ssrLoadModule`    | `build({ ssr })`            | -                |
+| CSS Imports     | `transformRequest` | `build()` + CSS assertions  | Browser test     |
+| Error Messages  | Logger spy         | Build rejection             | -                |
+| HMR             | -                  | -                           | Playwright test  |
 
 ## Implementation Guidelines
 
