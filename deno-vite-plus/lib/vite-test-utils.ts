@@ -1,17 +1,18 @@
 import type { InlineConfig, ViteDevServer } from 'npm:vite'
-import { build, createServer, preview } from 'npm:vite'
-import type { PreviewServer } from 'npm:vite'
+import { build, createServer } from 'npm:vite'
 
 /**
  * Options for Vite test operations
  */
 export interface ViteTestOptions {
-  /** Path to the Vite config file */
-  configFile?: string
+  /** Path to the Vite config file, or false to disable */
+  configFile?: string | false
   /** Working directory for the test */
   cwd?: string
   /** Additional Vite config overrides */
   configOverrides?: InlineConfig
+  /** Inline config to use instead of config file */
+  inlineConfig?: InlineConfig
 }
 
 /**
@@ -58,37 +59,6 @@ export class ViteTestDevServer implements AsyncDisposable {
 }
 
 /**
- * Async disposable preview server wrapper
- */
-export class ViteTestPreviewServer implements AsyncDisposable {
-  private server: PreviewServer
-
-  constructor(server: PreviewServer) {
-    this.server = server
-  }
-
-  get previewServer(): PreviewServer {
-    return this.server
-  }
-
-  get port(): number {
-    const address = this.server.httpServer?.address()
-    if (typeof address === 'object' && address) {
-      return address.port
-    }
-    throw new Error('Server not listening')
-  }
-
-  get url(): string {
-    return `http://localhost:${this.port}`
-  }
-
-  async [Symbol.asyncDispose](): Promise<void> {
-    this.server.httpServer?.close()
-  }
-}
-
-/**
  * Run a Vite build programmatically
  */
 export async function runViteBuild(
@@ -101,6 +71,7 @@ export async function runViteBuild(
     root: options.cwd,
     logLevel: 'error',
     ...options.configOverrides,
+    ...options.inlineConfig,
   }
 
   const result = await build(config)
@@ -147,26 +118,4 @@ export async function runViteDevServer(
   await server.listen()
 
   return new ViteTestDevServer(server)
-}
-
-/**
- * Start a Vite preview server programmatically
- */
-export async function runVitePreview(
-  options: ViteTestOptions,
-): Promise<ViteTestPreviewServer> {
-  const config: InlineConfig = {
-    configFile: options.configFile ?? false,
-    root: options.cwd,
-    logLevel: 'warn',
-    preview: {
-      port: 0, // Use random available port
-      strictPort: false,
-    },
-    ...options.configOverrides,
-  }
-
-  const server = await preview(config)
-
-  return new ViteTestPreviewServer(server)
 }

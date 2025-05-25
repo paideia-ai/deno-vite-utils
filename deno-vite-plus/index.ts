@@ -1,5 +1,6 @@
 import type { Plugin } from 'vite'
 import viteDenoResolver from './plugins/vite-deno-resolver.ts'
+import nodeExternals from 'npm:rollup-plugin-node-externals'
 
 /**
  * Main plugin factory for deno-vite-plus
@@ -12,5 +13,12 @@ import viteDenoResolver from './plugins/vite-deno-resolver.ts'
  * - TypeScript/JSX transformation
  */
 export default function fasterDeno(): Plugin[] {
-  return [viteDenoResolver()]
+  return [
+    viteDenoResolver(),
+    nodeExternals({
+      deps: false,
+      peerDeps: false,
+      optDeps: false,
+    }),
+  ]
 }
