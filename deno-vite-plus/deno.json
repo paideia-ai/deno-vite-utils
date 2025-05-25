@@ -10,7 +10,7 @@
     "@/lib/resolver.ts": "./lib/resolver.ts"
   },
   "tasks": {
-    "test": "deno run -A tests/run-tests.ts",
-    "clean": "rm -rf tests/fixtures/*/dist"
+    "test": "deno test -A",
+    "check": "deno check *.ts lib/**/*.ts plugins/**/*.ts"
   }
 }

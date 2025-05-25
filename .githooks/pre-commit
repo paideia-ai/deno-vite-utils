@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# Exit on any error
+set -e
+
+echo "🔧 Running pre-commit hooks..."
+
+# Auto-format code
+echo "📝 Formatting code..."
+deno fmt
+
+# Auto-fix linting issues
+echo "🔍 Fixing linting issues..."
+deno lint --fix || true
+
+# Check if there are any changes after formatting/fixing
+if ! git diff --quiet; then
+    echo "📦 Staging auto-fixed changes..."
+    # Stage only the files that were already staged (don't add new files)
+    git diff --name-only --cached | xargs -I {} sh -c 'git add "{}"'
+fi
+
+# Now run the actual checks
+echo "✅ Running format check..."
+if ! deno fmt --check; then
+    echo "❌ Format check failed. This shouldn't happen after auto-formatting."
+    echo "   Please check for any issues and try again."
+    exit 1
+fi
+
+echo "✅ Running lint check..."
+if ! deno lint; then
+    echo "❌ Linting failed. Some issues couldn't be auto-fixed."
+    echo "   Please fix the remaining issues manually."
+    exit 1
+fi
+
+echo "✅ Type checking..."
+if ! deno task -r check; then
+    echo "❌ Type checking failed."
+    echo "   Please fix type errors before committing."
+    exit 1
+fi
+
+echo "✅ Running tests..."
+if ! deno task -r test; then
+    echo "❌ Tests failed."
+    echo "   Please fix failing tests before committing."
+    exit 1
+fi
+
+echo "✅ All pre-commit checks passed!"
