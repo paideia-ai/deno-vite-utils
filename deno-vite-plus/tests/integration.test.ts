@@ -68,17 +68,25 @@ Deno.test('example-basic', async (t) => {
     // Start Hono server to serve static files
     const app = new Hono()
 
+    // Declare abort controller here so it's accessible in finally block
+    const abortController = new AbortController()
+
     // Serve static files from dist/client
+    const staticRoot = join(exampleDir, 'dist/client')
+
     app.use(
       '/*',
       serveStatic({
-        root: join(exampleDir, 'dist/client'),
+        root: staticRoot,
       }),
     )
 
-    // Start the server
+    // Start the server with abort controller for force shutdown
     const port = 4173
-    const server = Deno.serve({ port }, app.fetch)
+    Deno.serve({
+      port,
+      signal: abortController.signal,
+    }, app.fetch)
     const serverUrl = `http://localhost:${port}`
 
     // Use pre-warmed browser
@@ -91,14 +99,16 @@ Deno.test('example-basic', async (t) => {
 
     try {
       // Navigate to the app
-      await page.goto(serverUrl, { waitUntil: 'networkidle2' })
+      await page.goto(serverUrl, {
+        waitUntil: 'load',
+      })
 
       // Wait for React to mount
       await page.waitForSelector('#root > div', { timeout: 5000 })
 
       // Verify React rendered correctly
       const appContent = await page.evaluate(() => {
-        // @ts-ignore - This function runs in the browser context where 'document' exists
+        // @ts-expect-error - This runs in browser context
         const root = document.getElementById('root')
         return {
           hasContent: root?.children.length > 0,
@@ -111,11 +121,13 @@ Deno.test('example-basic', async (t) => {
 
       // Test interaction - click the counter button
       const buttonSelector = 'button'
-      const button = await page.waitForSelector(buttonSelector)
+      const button = await page.waitForSelector(buttonSelector, {
+        timeout: 5000,
+      })
 
       // Get initial count
       const initialText = await page.evaluate((selector: string) => {
-        // @ts-ignore - This function runs in the browser context where 'document' exists
+        // @ts-expect-error - This runs in browser context
         const btn = document.querySelector(selector)
         return btn?.textContent || ''
       }, { args: [buttonSelector] }) as string
@@ -126,7 +138,7 @@ Deno.test('example-basic', async (t) => {
       await new Promise((resolve) => setTimeout(resolve, 100)) // Small delay for React to re-render
 
       const updatedText = await page.evaluate((selector: string) => {
-        // @ts-ignore - This function runs in the browser context where 'document' exists
+        // @ts-expect-error - This runs in browser context
         const btn = document.querySelector(selector)
         return btn?.textContent || ''
       }, { args: [buttonSelector] }) as string
@@ -150,11 +162,10 @@ Deno.test('example-basic', async (t) => {
         0,
         `Console errors detected:\n${realErrors.join('\n')}`,
       )
-
-      await page.close()
-      await server.shutdown()
     } finally {
-      // Only close the page, not the browser (it's pre-warmed and shared)
+      // Clean up
+      await page.close()
+      abortController.abort()
     }
   })
 
