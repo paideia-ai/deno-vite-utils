@@ -16,13 +16,11 @@ export class DenoResolver {
     for (const module of info.modules) {
       if ('error' in module || module.kind !== 'esm') {
         this.modules.set(module.specifier, module)
-        console.log('Added module', module.specifier)
         continue
       }
 
       const resolvedInfo = this.transformEsmModule(module, info.redirects)
       this.modules.set(module.specifier, resolvedInfo)
-      console.log('Added module', module.specifier)
     }
 
     const actualId = info.roots[0]
@@ -47,7 +45,10 @@ export class DenoResolver {
     }
   }
 
-  async resolve(id: string, importerSpecifier: string | null): Promise<string> {
+  async resolve(
+    id: string,
+    importerSpecifier: string | null,
+  ): Promise<string | null> {
     if (importerSpecifier !== null) {
       // With importer, id must be in the importer's dependencies
       const importerModule = this.modules.get(importerSpecifier)
@@ -68,9 +69,7 @@ export class DenoResolver {
         }
       }
 
-      throw new Error(
-        `Import "${id}" not found in dependencies of ${importerSpecifier}`,
-      )
+      return null
     } else {
       // Without importer, check cache first
       const cached = this.idToSpecifierCache.get(id)

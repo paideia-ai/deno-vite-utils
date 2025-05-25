@@ -11,6 +11,7 @@ import nodeExternals from 'npm:rollup-plugin-node-externals'
  * - Local Deno module imports
  * - SSR support for both development and production
  * - TypeScript/JSX transformation
+ * - Transform @deno-vite-import comments into actual imports
  */
 export default function fasterDeno(): Plugin[] {
   return [
