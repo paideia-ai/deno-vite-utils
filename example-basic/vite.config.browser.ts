@@ -1,11 +1,10 @@
 import { defineConfig } from 'vite'
 import react from 'npm:@vitejs/plugin-react@4.4.1'
-import fasterDeno from '../../../index.ts'
+import fasterDeno from '../deno-vite-plus/index.ts'
 
 export default defineConfig({
   plugins: [
-    // For browser builds, we pass dev: true to fasterDeno (or use default)
-    fasterDeno({ dev: true }),
+    ...fasterDeno(),
     react(),
   ],
   build: {

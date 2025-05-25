@@ -1,12 +1,10 @@
 import { defineConfig } from 'vite'
 import react from 'npm:@vitejs/plugin-react@4.4.1'
-import fasterDeno from '../../../index.ts'
+import fasterDeno from '../deno-vite-plus/index.ts'
 
 export default defineConfig({
   plugins: [
-    // For SSR builds, we pass dev: false to fasterDeno
-    // which will automatically include nodeExternals
-    fasterDeno({ dev: false }),
+    ...fasterDeno(),
     react(),
   ],
   build: {
