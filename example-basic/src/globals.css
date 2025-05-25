@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+
+/* Set a background color to verify Tailwind is working */
+body {
+  @apply bg-slate-100;
+}

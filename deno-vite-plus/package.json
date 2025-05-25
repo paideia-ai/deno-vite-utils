@@ -1,6 +1,12 @@
 {
   "type": "module",
   "dependencies": {
+    "@babel/parser": "^7.27.2",
+    "@babel/types": "^7.27.1",
+    "acorn": "^8.14.1",
+    "acorn-jsx": "^5.3.2",
+    "acorn-typescript": "^1.4.13",
+    "magic-string": "^0.30.17",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "rollup-plugin-node-externals": "^8.0.0",

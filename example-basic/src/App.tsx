@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Button } from 'jsr:@isofucius/deno-shadcn-ui/default/ui/button'
 
+// @deno-vite-import ./globals.css
+
 function App() {
   const [count, setCount] = useState(0)
 

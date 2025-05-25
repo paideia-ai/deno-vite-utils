@@ -2,11 +2,10 @@
 
 import { extname } from 'jsr:@std/path'
 import type { Plugin } from 'vite'
-import { transform } from 'esbuild'
-import { mediaTypeToLoader } from '@/lib/utils.ts'
 import { DenoEnv } from '@/lib/deno-env.ts'
 import { DenoResolver } from '@/lib/deno-resolver.ts'
 import process from 'node:process'
+import { loadAndRewrite } from './vite-load-hook.ts'
 
 export function toDenoSpecifier(specifier: string): string {
   const encoded = encodeURIComponent(specifier)
@@ -102,90 +101,76 @@ export default function viteDenoResolver(): Plugin {
     },
 
     async resolveId(id, importer, options) {
-      try {
-        const importerSpecifier = await (async () => {
-          if (!importer) {
-            return null
-          }
-
-          const specifier = parseDenoSpecifier(importer)
-          if (specifier) {
-            return specifier
-          }
-
-          if (
-            importer.startsWith(root + '/') &&
-            !importer.includes('/node_modules/')
-          ) {
-            const exts = ['.js', '.ts', '.jsx', '.tsx']
-            if (!exts.includes(extname(importer))) {
-              return null
-            }
-
-            return await resolver.resolve(importer, null)
-          }
-
-          return null
-        })()
-
-        if (importer && !importerSpecifier) {
-          // None of our business
+      const importerSpecifier = await (async () => {
+        if (!importer) {
           return null
         }
 
-        if (!importerSpecifier) {
-          // - We don't handle virtual modules
-          // - We don't handle absolute paths, as they are URLs for vite
-          const invalidPrefixes = ['\0', '/', '.']
-          if (invalidPrefixes.some((prefix) => id.startsWith(prefix))) {
+        const specifier = parseDenoSpecifier(importer)
+        if (specifier) {
+          return specifier
+        }
+
+        if (
+          importer.startsWith(root + '/') &&
+          !importer.includes('/node_modules/')
+        ) {
+          const exts = ['.js', '.ts', '.jsx', '.tsx']
+          if (!exts.includes(extname(importer))) {
             return null
           }
+
+          return await resolver.resolve(importer, null)
         }
 
-        if (id.includes('@radix-ui/react-compose-refs')) {
-          console.log(id, importer, importerSpecifier)
-        }
-
-        const target = await resolver.resolve(id, importerSpecifier || null)
-        const targetModule = resolver.retrieveModule(target)
-
-        if ('error' in targetModule) {
-          throw new Error(`Failed to resolve: ${id}`)
-        }
-
-        if (targetModule.kind === 'npm') {
-          const npmId = npmSpecifierToNpmId(
-            targetModule.specifier,
-          )
-          console.log(
-            'encounterd npm specifier',
-            targetModule.specifier,
-            targetModule.npmPackage,
-            'let vite to resolve',
-            npmId,
-          )
-
-          return this.resolve(npmId, importer, {
-            ...options,
-            skipSelf: true,
-          })
-        }
-
-        const resolvedId = toDenoSpecifier(target)
-        if (!isSSR || isDev) {
-          console.log('💧', resolvedId, target, parseDenoSpecifier(resolvedId))
-          return resolvedId
-        }
-
-        // TODO: we need to decide if this should be external or not
-        return {
-          id: resolvedId,
-          external: false,
-        }
-      } catch (error) {
-        console.log(error)
-        console.log(id, importer)
         return null
+      })()
+
+      if (importer && !importerSpecifier) {
+        // None of our business
+        return null
+      }
+
+      if (!importerSpecifier) {
+        // - We don't handle virtual modules
+        // - We don't handle absolute paths, as they are URLs for vite
+        const invalidPrefixes = ['\0', '/', '.']
+        if (invalidPrefixes.some((prefix) => id.startsWith(prefix))) {
+          return null
+        }
+      }
+
+      const target = await resolver.resolve(id, importerSpecifier || null)
+      if (!target) {
+        return null
+      }
+
+      const targetModule = resolver.retrieveModule(target)
+
+      if ('error' in targetModule) {
+        throw new Error(`Failed to resolve: ${id}`)
+      }
+
+      if (targetModule.kind === 'npm') {
+        const npmId = npmSpecifierToNpmId(
+          targetModule.specifier,
+        )
+
+        return this.resolve(npmId, importer, {
+          ...options,
+          skipSelf: true,
+        })
+      }
+
+      const resolvedId = toDenoSpecifier(target)
+      if (!isSSR || isDev) {
+        return resolvedId
+      }
+
+      // TODO: we need to decide if this should be external or not
+      return {
+        id: resolvedId,
+        external: false,
       }
     },
 
@@ -236,27 +221,9 @@ export default function viteDenoResolver(): Plugin {
           return sourceCode
         }
 
-        const src = await Deno.readTextFile(moduleInfo.local)
-
-        if (moduleInfo.mediaType === 'JavaScript') {
-          return src
-        }
-        if (moduleInfo.mediaType === 'Json') {
-          return `export default ${src}`
-        }
-
-        const result = await transform(src, {
-          format: 'esm',
-          loader: mediaTypeToLoader(moduleInfo.mediaType),
-          logLevel: 'silent',
-          jsx: 'automatic',
-          jsxImportSource: 'react',
-        })
-
-        return { code: result.code, map: result.map === '' ? null : result.map }
+        return await loadAndRewrite(moduleInfo)
       } catch (error) {
         console.log(error)
-        console.log('🔥', id)
         return null
       }
     },
