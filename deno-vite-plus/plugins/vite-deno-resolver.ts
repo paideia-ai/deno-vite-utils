@@ -4,7 +4,6 @@ import { extname } from 'jsr:@std/path'
 import type { Plugin } from 'vite'
 import { DenoEnv } from '@/lib/deno-env.ts'
 import { DenoResolver } from '@/lib/deno-resolver.ts'
-import process from 'node:process'
 import { loadAndRewrite } from './vite-load-hook.ts'
 
 export function toDenoSpecifier(specifier: string): string {
@@ -66,7 +65,7 @@ export default function viteDenoResolver(): Plugin {
       isSSR = env.isSsrBuild || false
 
       // Initialize resolver with the correct root directory
-      root = config.root || process.cwd()
+      root = config.root || Deno.cwd()
       resolver = new DenoResolver(new DenoEnv(root))
 
       // Ensure correct resolve conditions for browser vs SSR

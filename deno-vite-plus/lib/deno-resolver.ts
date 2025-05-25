@@ -95,4 +95,46 @@ export class DenoResolver {
     }
     return module
   }
+
+  /**
+   * Collect all dependencies transitively for a given entry module
+   */
+  async collectDeps(entry: string): Promise<string[]> {
+    const seen = new Set<string>()
+
+    const walk = async (spec: string) => {
+      if (seen.has(spec)) {
+        return
+      }
+      seen.add(spec)
+
+      // Ensure the module is resolved
+      if (!this.modules.has(spec)) {
+        try {
+          await this.resolve(spec, null)
+        } catch {
+          // Skip modules that can't be resolved
+          return
+        }
+      }
+
+      const module = this.modules.get(spec)
+      if (!module) {
+        return
+      }
+
+      // Only process ESM modules with dependencies
+      if ('error' in module || module.kind !== 'esm') {
+        return
+      }
+
+      // Recursively walk dependencies
+      for (const dep of module.dependencies) {
+        await walk(dep.specifier)
+      }
+    }
+
+    await walk(entry)
+    return Array.from(seen)
+  }
 }
