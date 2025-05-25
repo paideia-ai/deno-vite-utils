@@ -136,3 +136,4 @@ dist
 .pnp.*
 
 .vite/
+.DS_Store
