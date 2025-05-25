@@ -16,9 +16,15 @@ const isCI = Deno.env.get('CI') === 'true' ||
 
 // Launch a browser instance that will be reused across all tests
 export const globalBrowser = await launch(
-  isCI ? {} : {
-    // Use system Chrome installation on macOS to avoid Chromium download issues
-    path: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    headless: true,
-  },
+  isCI
+    ? {
+      // CI environments often need --no-sandbox flag
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      headless: true,
+    }
+    : {
+      // Use system Chrome installation on macOS to avoid Chromium download issues
+      path: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      headless: true,
+    },
 )
