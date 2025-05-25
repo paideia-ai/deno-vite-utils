@@ -23,23 +23,19 @@ Deno-specific imports, SSR support, and build optimizations.
 ### Implemented Features
 
 1. **Import Resolution**:
-   - ✅ JSR imports (`jsr:@package/name`) via vite-deno-resolver plugin
-   - ✅ NPM imports (`npm:package@version`) via npm-unprefix plugin
+   - ✅ JSR imports (`jsr:@package/name`)
+   - ✅ NPM imports (`npm:package@version`)
    - ✅ Scoped package resolution (`@org/package`)
    - ✅ TypeScript/JSX transformation via esbuild
 
 2. **SSR Support**:
-   - ✅ Development SSR with native Deno module loading (ssr-dev-plugin)
-   - ✅ Production SSR with node externals
-   - ✅ Configurable external dependencies
+   - ✅ Development SSR with native Deno module loading
+   - ✅ Production SSR with externalization support
+   - ✅ Virtual module generation for SSR dev mode
 
-3. **CSS Support**:
-   - ✅ CSS imports in TypeScript files via faster-deno-css plugin
-   - ✅ Basic CSS HMR support
-
-4. **Performance**:
+3. **Performance**:
    - ✅ Resolution caching for repeated imports
-   - ✅ Efficient plugin ordering
+   - ✅ Efficient module resolution using Deno's native tooling
 
 ### Pending Features
 
@@ -64,12 +60,15 @@ Deno-specific imports, SSR support, and build optimizations.
 
 ### Plugin System
 
-The project uses a modular plugin architecture with four main plugins:
+The project provides a unified Vite plugin that handles all Deno-specific
+functionality:
 
-1. **vite-deno-resolver**: Core resolver for Deno-specific imports
-2. **npm-unprefix**: Strips npm: prefixes for Vite compatibility
-3. **ssr-dev-plugin**: Handles SSR in development mode
-4. **faster-deno-css**: CSS import handling for TypeScript files
+**vite-deno-resolver**: A comprehensive plugin that:
+
+- Resolves Deno-specific imports (JSR, NPM, local files)
+- Handles TypeScript/JSX transformation via esbuild
+- Manages SSR in both development and production modes
+- Converts npm: specifiers to standard npm packages for Vite compatibility
 
 ### Key Design Decisions
 
@@ -161,11 +160,13 @@ deno-vite-utils/
 │   │   ├── ssr-dev-plugin.ts
 │   │   └── *.test.ts       # Plugin tests
 │   ├── lib/                # Shared utilities
-│   │   ├── resolver.ts     # Resolution helpers
+│   │   ├── deno-env.ts     # Deno environment handling
+│   │   ├── deno-resolver.ts # Module resolution logic
+│   │   ├── test-utils.ts   # Test utilities
+│   │   ├── types.ts        # TypeScript interfaces
 │   │   └── utils.ts        # Common utilities
-│   ├── tests/              # Integration tests
-│   │   └── fixtures/       # Test applications
-│   └── faster-deno-css.ts  # CSS plugin
+│   └── tests/              # Integration tests
+│       └── fixtures/       # Test applications
 └── deno.json               # Workspace configuration
 ```
 
@@ -173,21 +174,61 @@ deno-vite-utils/
 
 ### Resolution Flow
 
-1. npm-unprefix strips `npm:` prefixes
-2. vite-deno-resolver handles `jsr:` and `@` imports
-3. ssr-dev-plugin intercepts SSR imports in dev
-4. Vite handles remaining standard imports
+1. vite-deno-resolver intercepts Deno-specific imports
+2. Uses `deno info --json` to resolve module dependencies
+3. Converts npm: specifiers to standard npm packages
+4. Handles SSR module loading in development
+5. Vite handles remaining standard imports
 
 ### Virtual Module IDs
 
-- Deno resolver: `\0deno::${mediaType}::${id}::${resolvedPath}`
-- SSR dev: `\0deno-ssr-dev::${originalId}`
+- Deno resolver: `\0deno::${encodedSpecifier}`
+- The specifier is URL-encoded to handle special characters
 
 ### Caching Strategy
 
 - Resolution results cached in memory
 - Cache persists for entire Vite session
 - No file-based caching currently
+
+## Deno Info JSON Behavior
+
+Based on testing, here's how `deno info --json` behaves:
+
+### roots[0] patterns:
+
+- Relative paths (./main.ts) → Resolved to absolute file URLs
+  (file:///full/path/main.ts)
+- Import map bare specifiers (chalk) → Resolved to versioned npm specifier
+  (npm:chalk@5.3.0)
+- JSR bare specifiers (jsr:@luca/cases) → Stays as-is in roots
+- Non-existent files (./non-existent.ts) → Still resolved to absolute file URL
+  (doesn't fail!)
+
+### Redirects happen when:
+
+- JSR packages: jsr:@luca/cases → https://jsr.io/@luca/cases/1.0.0/mod.ts
+- NPM packages: npm:chalk@5.3.0 → npm:/chalk@5.3.0 (adds slash)
+- Import maps: When bare specifier is resolved via import map
+- NO redirects for: File URLs, they stay as-is
+
+### Module types in modules array:
+
+- ESM modules (kind: "esm"): Local files, remote URLs (deno.land, jsr.io)
+- NPM modules (kind: "npm"): npm packages
+- Node modules (kind: "node"): Node built-ins like node:path
+- Errors: Non-existent files/packages have error field instead of kind
+
+### Key insights:
+
+- Non-existent files don't cause deno info to fail - they return an error module
+- The specifier field in modules is the final resolved URL/path
+- Import maps are resolved in roots[0], then redirects happen
+- Dependencies show both the original specifier and the resolved code.specifier
+- To find the module for a given input:
+  1. Get actualId = json.roots[0]
+  2. Get redirected = json.redirects[actualId] ?? actualId
+  3. Find module where module.specifier === redirected
 
 ## References
 

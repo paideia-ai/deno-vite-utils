@@ -1,23 +1,16 @@
 import type { Plugin } from 'vite'
 import viteDenoResolver from './plugins/vite-deno-resolver.ts'
-import fasterDenoCss from './faster-deno-css.ts'
 
 /**
- * Main plugin factory for faster-deno-vite
+ * Main plugin factory for deno-vite-plus
  *
- * This returns an array of plugins in the correct order:
- * 1. nodeExternals (in non-dev mode only)
- * 2. ssrDevPlugin (in dev mode only, if ssrDevExternalDeps is specified)
- * 3. npmUnprefixPlugin - handles npm: prefixed imports
- * 4. viteDenoResolver - handles jsr: imports and imports from deno modules
- *
- * Plugin order is important:
- * - nodeExternals must come first in non-dev mode
- * - ssrDevPlugin should come before npmUnprefixPlugin to handle specified dependencies
- * - npmUnprefixPlugin must come before viteDenoResolver to handle npm: imports
+ * This returns an array containing the unified Deno resolver plugin that handles:
+ * - JSR imports (jsr:@package/name)
+ * - NPM imports (npm:package@version)
+ * - Local Deno module imports
+ * - SSR support for both development and production
+ * - TypeScript/JSX transformation
  */
 export default function fasterDeno(): Plugin[] {
   return [viteDenoResolver()]
 }
-
-export { fasterDenoCss }

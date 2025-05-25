@@ -4,7 +4,8 @@ import { extname } from 'jsr:@std/path'
 import type { Plugin } from 'vite'
 import { transform } from 'esbuild'
 import { mediaTypeToLoader } from '@/lib/utils.ts'
-import { DenoEnv, DenoResolver } from '../playground.ts'
+import { DenoEnv } from '@/lib/deno-env.ts'
+import { DenoResolver } from '@/lib/deno-resolver.ts'
 
 export function toDenoSpecifier(specifier: string): string {
   const encoded = encodeURIComponent(specifier)
@@ -21,24 +22,27 @@ export function parseDenoSpecifier(specifier: string): string | null {
 
 export function npmSpecifierToNpmId(
   specifier: string,
-  npmPackage: string,
 ): string {
   // Remove npm:/ prefix
   const withoutPrefix = specifier.slice(5)
-  
+
   // Split by / to separate package name from path
   const parts = withoutPrefix.split('/')
-  
+
   if (parts[0].startsWith('@')) {
     // Scoped package: @org/package@version/path -> @org/package/path
     const scopedPackage = parts[0] + '/' + parts[1].split('@')[0]
     const pathParts = parts.slice(2)
-    return pathParts.length > 0 ? scopedPackage + '/' + pathParts.join('/') : scopedPackage
+    return pathParts.length > 0
+      ? scopedPackage + '/' + pathParts.join('/')
+      : scopedPackage
   } else {
     // Regular package: package@version/path -> package/path
     const packageName = parts[0].split('@')[0]
     const pathParts = parts.slice(1)
-    return pathParts.length > 0 ? packageName + '/' + pathParts.join('/') : packageName
+    return pathParts.length > 0
+      ? packageName + '/' + pathParts.join('/')
+      : packageName
   }
 }
 
@@ -146,7 +150,6 @@ export default function viteDenoResolver(): Plugin {
         if (targetModule.kind === 'npm') {
           const npmId = npmSpecifierToNpmId(
             targetModule.specifier,
-            targetModule.npmPackage,
           )
           console.log(
             'encounterd npm specifier',
