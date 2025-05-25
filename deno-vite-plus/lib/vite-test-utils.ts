@@ -133,7 +133,7 @@ export async function runViteDevServer(
   options: ViteTestOptions,
 ): Promise<ViteTestDevServer> {
   const config: InlineConfig = {
-    configFile: options.configFile,
+    configFile: options.configFile ?? false,
     root: options.cwd,
     logLevel: 'warn',
     server: {
@@ -156,7 +156,7 @@ export async function runVitePreview(
   options: ViteTestOptions,
 ): Promise<ViteTestPreviewServer> {
   const config: InlineConfig = {
-    configFile: options.configFile,
+    configFile: options.configFile ?? false,
     root: options.cwd,
     logLevel: 'warn',
     preview: {

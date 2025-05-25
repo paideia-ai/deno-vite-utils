@@ -2,13 +2,18 @@
 
 // Pre-warm esbuild service before any tests to avoid subprocess leaks
 import '../lib/esbuild-warmup.ts'
+// Pre-warm browser instance before any tests to avoid subprocess leaks
+import { globalBrowser } from '../lib/browser-warmup.ts'
 
 import {
+  assert,
   assertEquals,
   assertMatch,
   assertStringIncludes,
 } from 'jsr:@std/assert'
 import { join } from 'jsr:@std/path'
+import { Hono } from 'jsr:@hono/hono'
+import { serveStatic } from 'jsr:@hono/hono/deno'
 import {
   runViteBuild,
   runViteDevServer,
@@ -19,8 +24,6 @@ Deno.test('example-basic', async (t) => {
   // Test matrix: {dev: false/true} × {ssr: false/true}
 
   await t.step('browser build (dev=false, ssr=false)', async () => {
-    console.log('🔨 Running browser build...')
-
     // Import our plugin directly
     const { default: fasterDeno } = await import('../index.ts')
     const { default: react } = await import('npm:@vitejs/plugin-react@4.4.1')
@@ -40,7 +43,6 @@ Deno.test('example-basic', async (t) => {
           outDir: 'dist/client',
           emptyOutDir: true,
         },
-        logLevel: 'info', // Enable more logging
       },
     })
 
@@ -57,6 +59,103 @@ Deno.test('example-basic', async (t) => {
     const files = [...Deno.readDirSync(join(outputDir, 'assets'))]
     const jsFiles = files.filter((file) => file.name.endsWith('.js'))
     assertEquals(jsFiles.length > 0, true, 'No JS files found in output')
+  })
+
+  await t.step('browser runtime verification', async () => {
+    // Get the absolute path to example-basic
+    const exampleDir = join(Deno.cwd(), '..', 'example-basic')
+
+    // Start Hono server to serve static files
+    const app = new Hono()
+
+    // Serve static files from dist/client
+    app.use(
+      '/*',
+      serveStatic({
+        root: join(exampleDir, 'dist/client'),
+      }),
+    )
+
+    // Start the server
+    const port = 4173
+    const server = Deno.serve({ port }, app.fetch)
+    const serverUrl = `http://localhost:${port}`
+
+    // Use pre-warmed browser
+    const browser = globalBrowser
+    const page = await browser.newPage()
+
+    // Collect console messages and errors
+    const consoleLogs: string[] = []
+    const pageErrors: string[] = []
+
+    try {
+      // Navigate to the app
+      await page.goto(serverUrl, { waitUntil: 'networkidle2' })
+
+      // Wait for React to mount
+      await page.waitForSelector('#root > div', { timeout: 5000 })
+
+      // Verify React rendered correctly
+      const appContent = await page.evaluate(() => {
+        // @ts-ignore - This function runs in the browser context where 'document' exists
+        const root = document.getElementById('root')
+        return {
+          hasContent: root?.children.length > 0,
+          innerHTML: root?.innerHTML || '',
+        }
+      })
+
+      assert(appContent.hasContent, 'React app did not render any content')
+      assertStringIncludes(appContent.innerHTML, 'Vite + Deno + React')
+
+      // Test interaction - click the counter button
+      const buttonSelector = 'button'
+      const button = await page.waitForSelector(buttonSelector)
+
+      // Get initial count
+      const initialText = await page.evaluate((selector: string) => {
+        // @ts-ignore - This function runs in the browser context where 'document' exists
+        const btn = document.querySelector(selector)
+        return btn?.textContent || ''
+      }, { args: [buttonSelector] }) as string
+      assertStringIncludes(initialText, 'Count is 0')
+
+      // Click and verify count increases
+      await button.click()
+      await new Promise((resolve) => setTimeout(resolve, 100)) // Small delay for React to re-render
+
+      const updatedText = await page.evaluate((selector: string) => {
+        // @ts-ignore - This function runs in the browser context where 'document' exists
+        const btn = document.querySelector(selector)
+        return btn?.textContent || ''
+      }, { args: [buttonSelector] }) as string
+      assertStringIncludes(updatedText, 'Count is 1')
+
+      // Check for any runtime errors
+      assertEquals(
+        pageErrors.length,
+        0,
+        `Page errors detected:\n${pageErrors.join('\n')}`,
+      )
+
+      // Check for console errors (excluding HMR messages)
+      const realErrors = consoleLogs.filter((log) =>
+        log.includes('[error]') &&
+        !log.includes('HMR') &&
+        !log.includes('WebSocket')
+      )
+      assertEquals(
+        realErrors.length,
+        0,
+        `Console errors detected:\n${realErrors.join('\n')}`,
+      )
+
+      await page.close()
+      await server.shutdown()
+    } finally {
+      // Only close the page, not the browser (it's pre-warmed and shared)
+    }
   })
 
   await t.step({
