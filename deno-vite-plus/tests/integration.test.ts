@@ -1,7 +1,7 @@
 /// <reference lib="deno.window" />
 
-// Set environment variable to help identify esbuild processes
-Deno.env.set('ESBUILD_PARENT_PID', Deno.pid.toString())
+// Pre-warm esbuild service before any tests to avoid subprocess leaks
+import '../lib/esbuild-warmup.ts'
 
 import {
   assertEquals,
@@ -57,102 +57,6 @@ Deno.test('example-basic', async (t) => {
     const files = [...Deno.readDirSync(join(outputDir, 'assets'))]
     const jsFiles = files.filter((file) => file.name.endsWith('.js'))
     assertEquals(jsFiles.length > 0, true, 'No JS files found in output')
-
-    // Show child processes before exiting
-    console.log('\n🔍 Checking for child processes...')
-
-    // Get current process PID
-    const currentPid = Deno.pid
-    console.log(`Current Deno process PID: ${currentPid}`)
-
-    // Use ps to find child processes of our Deno process
-    const psCommand = new Deno.Command('ps', {
-      args: ['-o', 'pid,ppid,comm', '-p', currentPid.toString()],
-    })
-    const psResult = await psCommand.output()
-    console.log('Current process info:')
-    console.log(new TextDecoder().decode(psResult.stdout))
-
-    // Find all processes with our PID as parent
-    const findChildrenCommand = new Deno.Command('pgrep', {
-      args: ['-P', currentPid.toString()],
-    })
-    const childPids = await findChildrenCommand.output()
-    const childPidList = new TextDecoder().decode(childPids.stdout).trim()
-      .split('\n').filter(Boolean)
-
-    if (childPidList.length > 0) {
-      console.log(`\n⚠️  Found ${childPidList.length} child process(es):`)
-
-      // Get details about each child process
-      for (const pid of childPidList) {
-        const detailCommand = new Deno.Command('ps', {
-          args: ['-o', 'pid,ppid,comm,args', '-p', pid],
-        })
-        const detail = await detailCommand.output()
-        console.log(new TextDecoder().decode(detail.stdout))
-      }
-
-      // Also check if any contain 'esbuild'
-      const psGrepCommand = new Deno.Command('ps', {
-        args: ['aux'],
-      })
-      const psGrepResult = await psGrepCommand.output()
-      const processes = new TextDecoder().decode(psGrepResult.stdout)
-      const esbuildProcesses = processes.split('\n').filter((line) =>
-        line.includes('esbuild') && !line.includes('grep')
-      )
-
-      if (esbuildProcesses.length > 0) {
-        console.log('\n🔧 esbuild processes found:')
-        esbuildProcesses.forEach((proc) => console.log(proc))
-      }
-    } else {
-      console.log('No child processes found')
-    }
-
-    console.log('\n📋 About to exit test step...\n')
-
-    // Kill esbuild child processes before exiting
-    if (childPidList.length > 0) {
-      console.log('🔪 Killing child processes...')
-      for (const pid of childPidList) {
-        try {
-          // Use kill command to terminate the process
-          const killCommand = new Deno.Command('kill', {
-            args: ['-TERM', pid],
-          })
-          await killCommand.output()
-          console.log(`   Killed process ${pid}`)
-        } catch (error) {
-          console.error(`   Failed to kill process ${pid}:`, error)
-        }
-      }
-
-      // Give processes a moment to clean up
-      await new Promise((resolve) => setTimeout(resolve, 100))
-
-      // Verify they're gone
-      const checkCommand = new Deno.Command('pgrep', {
-        args: ['-P', currentPid.toString()],
-      })
-      const checkResult = await checkCommand.output()
-      const remainingPids = new TextDecoder().decode(checkResult.stdout).trim()
-
-      if (remainingPids) {
-        console.log('⚠️  Some processes still running, using SIGKILL...')
-        const forcePids = remainingPids.split('\n').filter(Boolean)
-        for (const pid of forcePids) {
-          const forceKillCommand = new Deno.Command('kill', {
-            args: ['-KILL', pid],
-          })
-          await forceKillCommand.output()
-          console.log(`   Force killed process ${pid}`)
-        }
-      } else {
-        console.log('✅ All child processes terminated')
-      }
-    }
   })
 
   await t.step({
