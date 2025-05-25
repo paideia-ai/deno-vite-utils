@@ -6,6 +6,7 @@ import { transform } from 'esbuild'
 import { mediaTypeToLoader } from '@/lib/utils.ts'
 import { DenoEnv } from '@/lib/deno-env.ts'
 import { DenoResolver } from '@/lib/deno-resolver.ts'
+import process from 'node:process'
 
 export function toDenoSpecifier(specifier: string): string {
   const encoded = encodeURIComponent(specifier)
@@ -51,7 +52,8 @@ interface ModuleStorage {
 }
 
 export default function viteDenoResolver(): Plugin {
-  const resolver = new DenoResolver(new DenoEnv(Deno.cwd()))
+  let resolver: DenoResolver
+  let root: string
 
   let isDev = false
   let isSSR = false
@@ -63,6 +65,10 @@ export default function viteDenoResolver(): Plugin {
     async config(config, env) {
       isDev = env.command === 'serve'
       isSSR = env.isSsrBuild || false
+
+      // Initialize resolver with the correct root directory
+      root = config.root || process.cwd()
+      resolver = new DenoResolver(new DenoEnv(root))
 
       // Ensure correct resolve conditions for browser vs SSR
       if (!config.resolve) {
@@ -108,7 +114,7 @@ export default function viteDenoResolver(): Plugin {
           }
 
           if (
-            importer.startsWith(Deno.cwd() + '/') &&
+            importer.startsWith(root + '/') &&
             !importer.includes('/node_modules/')
           ) {
             const exts = ['.js', '.ts', '.jsx', '.tsx']
