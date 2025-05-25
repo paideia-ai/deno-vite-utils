@@ -1,5 +1,6 @@
-import type { InlineConfig, ViteDevServer } from 'npm:vite'
-import { build, createServer } from 'npm:vite'
+import type { InlineConfig } from 'npm:vite'
+import { build } from 'npm:vite'
+import { join } from 'jsr:@std/path'
 
 /**
  * Options for Vite test operations
@@ -25,37 +26,6 @@ export interface ViteBuildResult {
   buildTime: number
   /** Any build warnings */
   warnings?: string[]
-}
-
-/**
- * Async disposable dev server wrapper
- */
-export class ViteTestDevServer implements AsyncDisposable {
-  private server: ViteDevServer
-
-  constructor(server: ViteDevServer) {
-    this.server = server
-  }
-
-  get viteServer(): ViteDevServer {
-    return this.server
-  }
-
-  get port(): number {
-    const address = this.server.httpServer?.address()
-    if (typeof address === 'object' && address) {
-      return address.port
-    }
-    throw new Error('Server not listening')
-  }
-
-  get url(): string {
-    return `http://localhost:${this.port}`
-  }
-
-  async [Symbol.asyncDispose](): Promise<void> {
-    await this.server.close()
-  }
 }
 
 /**
@@ -98,12 +68,62 @@ export async function runViteBuild(
 }
 
 /**
+ * Wrapper for out-of-process Vite dev server
+ */
+class ViteSubprocessDevServer {
+  constructor(
+    private process: Deno.ChildProcess,
+    private _port: number,
+    private stderrDrainer: Promise<void>,
+  ) {}
+
+  get port(): number {
+    return this._port
+  }
+
+  get url(): string {
+    return `http://localhost:${this.port}`
+  }
+
+  async [Symbol.asyncDispose](): Promise<void> {
+    // Kill the process forcefully
+    try {
+      this.process.kill()
+      // Wait for stderr drainer to finish
+      await this.stderrDrainer
+      // Close stdout and stderr to prevent leaks
+      await this.process.stdout.cancel()
+      await this.process.stderr.cancel()
+      await this.process.status
+    } catch {
+      // Process might already be dead
+    }
+  }
+}
+
+/**
  * Start a Vite dev server programmatically
  */
 export async function runViteDevServer(
   options: ViteTestOptions,
-): Promise<ViteTestDevServer> {
-  const config: InlineConfig = {
+): Promise<ViteSubprocessDevServer> {
+  const inlineConfig = options.inlineConfig || options.configOverrides || {}
+
+  // Extract plugin names for serialization
+  const pluginNames: string[] = []
+  if (inlineConfig.plugins) {
+    for (const plugin of inlineConfig.plugins) {
+      if (plugin && typeof plugin === 'object' && 'name' in plugin) {
+        if (plugin.name === 'vite-deno-resolver') {
+          pluginNames.push('fasterDeno')
+        } else if (plugin.name === 'vite:react-babel') {
+          pluginNames.push('react')
+        }
+      }
+    }
+  }
+
+  const config = {
     configFile: options.configFile ?? false,
     root: options.cwd,
     logLevel: 'warn',
@@ -111,11 +131,75 @@ export async function runViteDevServer(
       port: 0, // Use random available port
       strictPort: false,
     },
-    ...options.configOverrides,
+    ...inlineConfig,
+    plugins: undefined, // Remove plugins from config
+    _plugins: pluginNames, // Add our custom field for plugin names
   }
 
-  const server = await createServer(config)
-  await server.listen()
+  // Path to the runner script
+  const runnerPath = join(import.meta.dirname!, 'vite-dev-runner.ts')
 
-  return new ViteTestDevServer(server)
+  // Start the subprocess
+  const command = new Deno.Command('deno', {
+    args: ['run', '-A', runnerPath, JSON.stringify(config)],
+    cwd: options.cwd || Deno.cwd(),
+    stdout: 'piped',
+    stderr: 'piped',
+  })
+
+  const process = command.spawn()
+
+  // Read stdout to get the port
+  const decoder = new TextDecoder()
+  const reader = process.stdout.getReader()
+
+  let port = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+
+      const text = decoder.decode(value)
+      const lines = text.split('\n')
+
+      for (const line of lines) {
+        if (line.startsWith('VITE_DEV_PORT:')) {
+          port = parseInt(line.split(':')[1])
+          break
+        }
+      }
+
+      if (port > 0) {
+        break
+      }
+    }
+  } finally {
+    // Release the reader lock
+    reader.releaseLock()
+  }
+
+  if (port === 0) {
+    process.kill()
+    await process.stdout.cancel()
+    await process.stderr.cancel()
+    throw new Error('Failed to get Vite dev server port')
+  }
+
+  // Give the server a moment to fully start
+  await new Promise<void>((resolve) => setTimeout(resolve, 100))
+
+  // Start draining stderr to prevent blocking
+  const stderrDrainer = (async () => {
+    try {
+      for await (const _ of process.stderr) {
+        // Just drain, don't log
+      }
+    } catch {
+      // Ignore errors when process is killed
+    }
+  })()
+
+  return new ViteSubprocessDevServer(process, port, stderrDrainer)
 }
