@@ -1,5 +1,5 @@
-import { assert } from 'jsr:@std/assert'
-import { Mutex } from 'npm:async-mutex'
+import { assert } from '@std/assert'
+import { Mutex } from 'async-mutex'
 import type { DenoInfoJsonV1 } from './types.ts'
 
 async function run(cmd: string[], cwd: string) {

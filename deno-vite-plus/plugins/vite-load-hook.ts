@@ -1,8 +1,8 @@
 // vite_load_hook.ts --------------------------------------------------------
-import { dirname as dir, join, resolve as resolvePath } from 'jsr:@std/path'
+import { dirname as dir, join, resolve as resolvePath } from '@std/path'
 import { type Loader, transform } from 'esbuild'
 import { parse as babelParse } from '@babel/parser'
-import MagicString from 'npm:magic-string'
+import MagicString from 'magic-string'
 
 import type { DenoMediaType, ResolvedInfo } from '../lib/types.ts'
 

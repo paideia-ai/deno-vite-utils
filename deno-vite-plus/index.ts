@@ -1,7 +1,7 @@
 import type { Plugin } from 'vite'
 import viteDenoResolver from './plugins/vite-deno-resolver.ts'
 import { viteDenoTailwindSource } from './plugins/vite-deno-tailwind-source.ts'
-import nodeExternals from 'npm:rollup-plugin-node-externals'
+import nodeExternals from 'rollup-plugin-node-externals'
 
 /**
  * Main plugin factory for deno-vite-plus

@@ -1,13 +1,32 @@
 {
-  "name": "@pea2/faster-deno-vite",
+  "name": "@isofucius/deno-vite-plus",
+  "version": "0.1.0",
   "exports": {
-    ".": "./index.ts",
-    "./faster-deno-css": "./faster-deno-css.ts"
+    ".": "./index.ts"
+  },
+  "publish": {
+    "include": [
+      "README.md",
+      "LICENSE",
+      "deno.json",
+      "index.ts",
+      "lib/deno-env.ts",
+      "lib/deno-resolver.ts",
+      "lib/types.ts",
+      "plugins/vite-deno-resolver.ts",
+      "plugins/vite-load-hook.ts",
+      "plugins/vite-deno-tailwind-source.ts"
+    ]
+  },
+  "compilerOptions": {
+    "lib": [
+      "deno.window"
+    ]
   },
   "imports": {
     "@/lib/": "./lib/",
-    "@/lib/utils.ts": "./lib/utils.ts",
-    "@/lib/resolver.ts": "./lib/resolver.ts"
+    "@std/assert": "jsr:@std/assert@^1.0.13",
+    "@std/path": "jsr:@std/path@^1.0.9"
   },
   "tasks": {
     "test": "deno test -A",

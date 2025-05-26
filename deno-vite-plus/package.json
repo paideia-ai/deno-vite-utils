@@ -6,6 +6,7 @@
     "acorn": "^8.14.1",
     "acorn-jsx": "^5.3.2",
     "acorn-typescript": "^1.4.13",
+    "async-mutex": "^0.5.0",
     "magic-string": "^0.30.17",
     "postcss-import": "^16.1.0",
     "react": "^19.1.0",
