@@ -38,10 +38,18 @@ export class DenoResolver {
       size: esm.size,
       mediaType: esm.mediaType,
       specifier: esm.specifier,
-      dependencies: (esm.dependencies ?? []).map((dep) => ({
-        relativePath: dep.specifier,
-        specifier: redirects[dep.code.specifier] ?? dep.code.specifier,
-      })),
+      dependencies: (esm.dependencies ?? []).map((dep) => {
+        const relativePath = dep.specifier
+        let specifier = dep.code?.specifier ?? dep.type?.specifier ??
+          relativePath
+        if (redirects[specifier]) {
+          specifier = redirects[specifier]
+        }
+        return {
+          relativePath,
+          specifier,
+        }
+      }),
     }
   }
 
