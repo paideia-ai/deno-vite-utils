@@ -1,7 +1,7 @@
 import type { Plugin } from 'vite'
 import { DenoEnv } from '@/lib/deno-env.ts'
 import { DenoResolver } from '@/lib/deno-resolver.ts'
-import { dirname, resolve, toFileUrl } from 'jsr:@std/path'
+import { dirname, resolve, toFileUrl } from '@std/path'
 
 /**
  * Vite plugin that transforms @deno-source directives to @source directives

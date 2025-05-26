@@ -1,6 +1,4 @@
-/// <reference lib="deno.window" />
-
-import { extname } from 'jsr:@std/path'
+import { extname } from '@std/path'
 import type { Plugin } from 'vite'
 import { DenoEnv } from '@/lib/deno-env.ts'
 import { DenoResolver } from '@/lib/deno-resolver.ts'
