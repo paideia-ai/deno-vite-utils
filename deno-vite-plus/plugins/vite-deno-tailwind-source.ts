@@ -1,8 +1,7 @@
 import type { Plugin } from 'vite'
 import { DenoEnv } from '@/lib/deno-env.ts'
 import { DenoResolver } from '@/lib/deno-resolver.ts'
-import { dirname, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { dirname, resolve, toFileUrl } from 'jsr:@std/path'
 
 /**
  * Vite plugin that transforms @deno-source directives to @source directives
@@ -20,7 +19,6 @@ export function viteDenoTailwindSource(): Plugin {
       // Initialize resolver with the correct root directory
       root = config.root || Deno.cwd()
       resolver = new DenoResolver(new DenoEnv(root))
-
       return config
     },
 
@@ -39,26 +37,19 @@ export function viteDenoTailwindSource(): Plugin {
       const extraSources = new Set<string>()
 
       for (const [, rawSpecifier] of matches) {
-        console.log('Found one deno source', rawSpecifier)
-
         // Resolve relative paths to absolute URLs
         const baseDir = dirname(id)
         const absolutePath = resolve(baseDir, rawSpecifier)
 
         // Scan for JSX/TSX files in the specified directory
         const jsxTsxFiles = await scanForJsxTsxFiles(absolutePath)
-        console.log(
-          `Found ${jsxTsxFiles.length} JSX/TSX files in ${absolutePath}`,
-        )
 
         // Collect dependencies for each JSX/TSX file
         for (const file of jsxTsxFiles) {
-          const fileUrl = pathToFileURL(file).href
-          console.log(`Processing file: ${file} -> ${fileUrl}`)
+          const fileUrl = toFileUrl(file).href
 
           try {
             const deps = await resolver.collectDeps(fileUrl)
-            console.log(`Found ${deps.length} dependencies for ${file}`)
 
             // Filter and add valid source files
             for (const dep of deps) {
@@ -88,16 +79,12 @@ export function viteDenoTailwindSource(): Plugin {
         .map((p) => `@source "${normalizePathForTailwind(p)}";`)
         .join('\n')
 
-      console.log(`Generated ${extraSources.size} @source directives`)
-
       // Remove @deno-source directives and append @source directives
       const withoutDenoSource = css.replace(
         /@deno-source\s+["'][^"']+["'];?/g,
         '',
       ).trim()
       const nextCss = withoutDenoSource + '\n' + tailwindSources + '\n'
-
-      console.log('Transformed CSS:', nextCss)
 
       return {
         code: nextCss,

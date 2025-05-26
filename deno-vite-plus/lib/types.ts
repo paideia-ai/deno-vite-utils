@@ -27,7 +27,10 @@ export interface EsmResolvedInfo {
   specifier: string
   dependencies?: Array<{
     specifier: string
-    code: {
+    code?: {
+      specifier: string
+    }
+    type?: {
       specifier: string
     }
   }>

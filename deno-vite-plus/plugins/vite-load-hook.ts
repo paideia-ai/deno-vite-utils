@@ -1,10 +1,62 @@
 // vite_load_hook.ts --------------------------------------------------------
-import { dirname as dir, resolve as resolvePath } from 'jsr:@std/path'
+import { dirname as dir, join, resolve as resolvePath } from 'jsr:@std/path'
 import { type Loader, transform } from 'esbuild'
 import { parse as babelParse } from '@babel/parser'
 import MagicString from 'npm:magic-string'
 
 import type { DenoMediaType, ResolvedInfo } from '../lib/types.ts'
+
+/**
+ * Cache for remote assets to avoid re-downloading
+ */
+class RemoteAssetCache {
+  private cache = new Map<string, string>() // URL -> local path
+  private tempDir: string
+
+  constructor() {
+    this.tempDir = Deno.makeTempDirSync({ prefix: 'vite-deno-assets-' })
+  }
+
+  async getLocalPath(url: string): Promise<string> {
+    if (this.cache.has(url)) {
+      return this.cache.get(url)!
+    }
+
+    // Download the file
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch ${url}: ${response.status} ${response.statusText}`,
+      )
+    }
+    const content = await response.text()
+
+    // Create a filename that preserves the extension
+    const urlPath = new URL(url).pathname
+    const filename = urlPath.split('/').pop() || 'asset'
+    // Add a hash to avoid conflicts
+    const hash = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(url),
+    )
+    const hashHex = Array.from(new Uint8Array(hash))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('')
+      .slice(0, 8)
+    const localPath = join(this.tempDir, `${hashHex}-${filename}`)
+
+    // Write to disk
+    await Deno.writeTextFile(localPath, content)
+
+    // Cache the mapping
+    this.cache.set(url, localPath)
+
+    return localPath
+  }
+}
+
+// Global singleton instance
+const remoteAssetCache = new RemoteAssetCache()
 
 export function mediaTypeToLoader(media: DenoMediaType): Loader {
   switch (media) {
@@ -28,13 +80,11 @@ export async function loadAndRewrite(
   let source = await Deno.readTextFile(moduleInfo.local)
 
   /* 2️⃣  magic-string rewrite + inline map */
-  if (
-    moduleInfo.specifier.startsWith('file://') &&
-    moduleInfo.mediaType !== 'Json'
-  ) {
-    source = rewriteAndInlineMap(
+  if (moduleInfo.mediaType !== 'Json') {
+    source = await rewriteAndInlineMap(
       source,
       moduleInfo.local,
+      moduleInfo.specifier,
     )
   }
 
@@ -56,7 +106,11 @@ export async function loadAndRewrite(
 
 /* ───────── pure text-rewriter ───────── */
 
-function rewriteAndInlineMap(source: string, file: string): string {
+async function rewriteAndInlineMap(
+  source: string,
+  file: string,
+  specifier: string,
+): Promise<string> {
   // Quick check to avoid costly parse if no deno-vite directives are present
   if (!source.includes('@deno-vite-import')) {
     return source
@@ -105,7 +159,12 @@ function rewriteAndInlineMap(source: string, file: string): string {
     /* basic: // @deno-vite-import ./foo.css */
     let m = text.match(/^@deno-vite-import\s+(.+)$/)
     if (m) {
-      const resolved = resolvePath(dir(file), stripQuotes(m[1]))
+      const relativePath = stripQuotes(m[1])
+      const resolved = await resolveRelativeImport(
+        file,
+        specifier,
+        relativePath,
+      )
       ms.overwrite(comment.start!, comment.end!, `import '${resolved}';`)
       mutated = true
       continue
@@ -115,7 +174,12 @@ function rewriteAndInlineMap(source: string, file: string): string {
     m = text.match(/^@deno-vite-import\(([^)]+)\)\s+(.+)$/)
     if (m) {
       const target = m[1].trim()
-      const resolved = resolvePath(dir(file), stripQuotes(m[2]))
+      const relativePath = stripQuotes(m[2])
+      const resolved = await resolveRelativeImport(
+        file,
+        specifier,
+        relativePath,
+      )
       // Always use a temporary binding, then assign — keeps the user's
       // pre‑declared variable intact in Deno.
       const tmp = `__dvi_${counter++}`
@@ -136,6 +200,30 @@ function rewriteAndInlineMap(source: string, file: string): string {
   const base64 = btoa(map.toString())
   return ms.toString() +
     `\n//# sourceMappingURL=data:application/json;base64,${base64}\n`
+}
+
+/**
+ * Resolves a relative import path based on the module's location.
+ *
+ * @param localPath - The local file path (moduleInfo.local)
+ * @param specifier - The module specifier (could be file://, http://, https://)
+ * @param relativePath - The relative import path to resolve (e.g., './base.css')
+ * @returns The resolved absolute path or URL
+ */
+async function resolveRelativeImport(
+  localPath: string,
+  specifier: string,
+  relativePath: string,
+): Promise<string> {
+  // For remote modules, resolve relative to the URL
+  if (specifier.startsWith('http://') || specifier.startsWith('https://')) {
+    const resolvedUrl = new URL(relativePath, specifier).href
+    // Download and cache the remote asset
+    return await remoteAssetCache.getLocalPath(resolvedUrl)
+  }
+
+  // For local modules, resolve relative to the file path
+  return resolvePath(dir(localPath), relativePath)
 }
 
 function stripQuotes(s: string): string {

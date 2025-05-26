@@ -95,7 +95,6 @@ export default function viteDenoResolver(): Plugin {
           config.resolve.conditions.push('browser')
         }
       }
-
       return config
     },
 
