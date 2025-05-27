@@ -1,4 +1,4 @@
-import { extname } from '@std/path'
+import { extname, globToRegExp, isGlob } from '@std/path'
 import type { Plugin } from 'vite'
 import { DenoEnv } from '@/lib/deno-env.ts'
 import { DenoResolver } from '@/lib/deno-resolver.ts'
@@ -52,7 +52,8 @@ export default function viteDenoResolver(): Plugin {
   let root: string
 
   let isDev = false
-  let isSSR = false
+  let isDefaultSSR = false
+  let ssrExternals: string[] = []
 
   return {
     name: 'vite-deno-resolver',
@@ -60,11 +61,18 @@ export default function viteDenoResolver(): Plugin {
 
     async config(config, env) {
       isDev = env.command === 'serve'
-      isSSR = env.isSsrBuild || false
+      isDefaultSSR = env.isSsrBuild || false
 
       // Initialize resolver with the correct root directory
       root = config.root || Deno.cwd()
       resolver = new DenoResolver(new DenoEnv(root))
+
+      // Store SSR externals if they're an array of strings
+      if (config.ssr?.external && Array.isArray(config.ssr.external)) {
+        ssrExternals = config.ssr.external.filter((ext) =>
+          typeof ext === 'string'
+        )
+      }
 
       // Ensure correct resolve conditions for browser vs SSR
       if (!config.resolve) {
@@ -75,7 +83,7 @@ export default function viteDenoResolver(): Plugin {
         config.resolve.conditions = []
       }
 
-      if (isSSR) {
+      if (isDefaultSSR) {
         // For SSR in Deno, prioritize deno conditions before node
         const denoConditions = ['deno', 'import', 'module']
         for (const condition of denoConditions) {
@@ -130,7 +138,7 @@ export default function viteDenoResolver(): Plugin {
       if (!importerSpecifier) {
         // - We don't handle virtual modules
         // - We don't handle absolute paths, as they are URLs for vite
-        const invalidPrefixes = ['\0', '/', '.']
+        const invalidPrefixes = ['\0', '/', '.', 'virtual:']
         if (invalidPrefixes.some((prefix) => id.startsWith(prefix))) {
           return null
         }
@@ -158,19 +166,36 @@ export default function viteDenoResolver(): Plugin {
         })
       }
 
+      if (targetModule.kind === 'node') {
+        return {
+          id,
+          external: true,
+        }
+      }
+
+      const isSSR = options?.ssr || isDefaultSSR
       const resolvedId = toDenoSpecifier(target)
       if (!isSSR || isDev) {
         return resolvedId
       }
 
-      // TODO: we need to decide if this should be external or not
+      // Check if the id matches any of the SSR externals patterns
+      const isExternal = ssrExternals.some((pattern) => {
+        if (isGlob(pattern)) {
+          const regex = globToRegExp(pattern)
+          return regex.test(id)
+        }
+        // Exact match
+        return id === pattern
+      })
+
       return {
         id: resolvedId,
-        external: false,
+        external: isExternal,
       }
     },
 
-    async load(id) {
+    async load(id, options) {
       try {
         const specifier = parseDenoSpecifier(id)
 
@@ -185,6 +210,8 @@ export default function viteDenoResolver(): Plugin {
             `Internal inconsistency: we should only resolve to an ESM module`,
           )
         }
+
+        const isSSR = options?.ssr || isDefaultSSR
 
         if (isDev && isSSR) {
           // we need to construct virtual module

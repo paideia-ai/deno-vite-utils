@@ -56,7 +56,7 @@ class RemoteAssetCache {
 }
 
 // Global singleton instance
-const remoteAssetCache = new RemoteAssetCache()
+export const remoteAssetCache = new RemoteAssetCache()
 
 export function mediaTypeToLoader(media: DenoMediaType): Loader {
   switch (media) {
@@ -76,24 +76,34 @@ export function mediaTypeToLoader(media: DenoMediaType): Loader {
 export async function loadAndRewrite(
   moduleInfo: ResolvedInfo,
 ): Promise<{ code: string; map: string | null }> {
-  /* 1️⃣  read the original text */
-  let source = await Deno.readTextFile(moduleInfo.local)
+  /* 1️⃣  resolve the specifier to get a local path */
+  let localPath: string
+  if (moduleInfo.specifier.startsWith('file://')) {
+    // For file:// URLs, convert to local path
+    localPath = new URL(moduleInfo.specifier).pathname
+  } else {
+    // For remote modules, download and cache
+    localPath = await remoteAssetCache.getLocalPath(moduleInfo.specifier)
+  }
 
-  /* 2️⃣  magic-string rewrite + inline map */
+  /* 2️⃣  read the original text */
+  let source = await Deno.readTextFile(localPath)
+
+  /* 3️⃣  magic-string rewrite + inline map */
   if (moduleInfo.mediaType !== 'Json') {
     source = await rewriteAndInlineMap(
       source,
-      moduleInfo.local,
+      localPath,
       moduleInfo.specifier,
     )
   }
 
-  /* 3️⃣  pass to esbuild.transform() */
+  /* 4️⃣  pass to esbuild.transform() */
   const result = await transform(source, {
     loader: mediaTypeToLoader(moduleInfo.mediaType),
     jsx: 'automatic',
     jsxImportSource: 'react',
-    sourcefile: moduleInfo.local, // keeps original filename in final map
+    sourcefile: localPath, // keeps original filename in final map
     sourcemap: 'external', // or "inline" if Vite prefers
     logLevel: 'silent',
   })

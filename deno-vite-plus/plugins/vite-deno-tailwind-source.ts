@@ -2,6 +2,7 @@ import type { Plugin } from 'vite'
 import { DenoEnv } from '@/lib/deno-env.ts'
 import { DenoResolver } from '@/lib/deno-resolver.ts'
 import { dirname, resolve, toFileUrl } from '@std/path'
+import { remoteAssetCache } from './vite-load-hook.ts'
 
 /**
  * Vite plugin that transforms @deno-source directives to @source directives
@@ -60,10 +61,22 @@ export function viteDenoTailwindSource(): Plugin {
                   continue
                 }
 
-                // Check if this is a scannable file based on media type
-                if (module.mediaType === 'JSX' || module.mediaType === 'TSX') {
-                  extraSources.add(module.local)
+                if (module.mediaType !== 'JSX' && module.mediaType !== 'TSX') {
+                  continue
                 }
+
+                let localPath: string
+                if (module.specifier.startsWith('file://')) {
+                  // For file:// URLs, convert to local path
+                  localPath = new URL(module.specifier).pathname
+                } else {
+                  // For remote modules, download and cache
+                  localPath = await remoteAssetCache.getLocalPath(
+                    module.specifier,
+                  )
+                }
+
+                extraSources.add(localPath)
               } catch (_error) {
                 // Skip modules that can't be retrieved
               }
