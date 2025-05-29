@@ -1,6 +1,6 @@
 {
   "name": "@isofucius/deno-vite-plus",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "exports": {
     ".": "./index.ts"
   },
