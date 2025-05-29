@@ -205,6 +205,11 @@ export default function viteDenoResolver(): Plugin {
 
         const moduleInfo = resolver.retrieveModule(specifier)
 
+        if (specifier.startsWith('file://')) {
+          const path = specifier.slice(7)
+          this.addWatchFile(path)
+        }
+
         if ('error' in moduleInfo || moduleInfo.kind !== 'esm') {
           throw new Error(
             `Internal inconsistency: we should only resolve to an ESM module`,
