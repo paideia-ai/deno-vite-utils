@@ -3,6 +3,15 @@ import viteDenoResolver from './plugins/vite-deno-resolver.ts'
 import { viteDenoTailwindSource } from './plugins/vite-deno-tailwind-source.ts'
 import nodeExternals from 'rollup-plugin-node-externals'
 
+export interface FasterDenoOptions {
+  /**
+   * Skip the development SSR virtualization.
+   *
+   * This is required to work with CSS modules for now.
+   */
+  skipDevSsrVirtualization?: boolean
+}
+
 /**
  * Main plugin factory for deno-vite-plus
  *
@@ -14,9 +23,9 @@ import nodeExternals from 'rollup-plugin-node-externals'
  * - TypeScript/JSX transformation
  * - Transform @deno-vite-import comments into actual imports
  */
-export default function fasterDeno(): Plugin[] {
+export default function fasterDeno(options: FasterDenoOptions = {}): Plugin[] {
   return [
-    viteDenoResolver(),
+    viteDenoResolver(options.skipDevSsrVirtualization ?? false),
     nodeExternals({
       deps: false,
       peerDeps: false,

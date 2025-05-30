@@ -47,7 +47,9 @@ interface ModuleStorage {
   __denoSsrDevModules?: Record<string, Record<string, unknown>>
 }
 
-export default function viteDenoResolver(): Plugin {
+export default function viteDenoResolver(
+  skipDevSsrVirtualization: boolean,
+): Plugin {
   let resolver: DenoResolver
   let root: string
 
@@ -218,7 +220,7 @@ export default function viteDenoResolver(): Plugin {
 
         const isSSR = options?.ssr || isDefaultSSR
 
-        if (isDev && isSSR) {
+        if (isDev && isSSR && !skipDevSsrVirtualization) {
           // we need to construct virtual module
 
           const module = await import(specifier)
